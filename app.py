@@ -3,58 +3,64 @@ import cv2
 import numpy as np
 
 st.set_page_config(layout="wide")
-st.title("🖨️ Sistem Pengimbas OMR Komputer (Versi Imbasan Asas)")
+st.title("🖨️ Pengimbas OMR: Instrumen Aptitud Am Tahun 4")
+st.subheader("Borang Jawapan Objektif (80 Soalan)")
 
-# 1. SET SKEMA JAWAPAN (Sisi Kiri)
-st.sidebar.header("🔑 Set Skema Jawapan")
-skema = []
-for i in range(1, 6): # Contoh untuk 5 soalan dahulu
-    jawapan = st.sidebar.selectbox(f"Soalan {i}", ["A", "B", "C", "D"], key=f"skema_{i}")
-    pemetaan = {"A": 0, "B": 1, "C": 2, "D": 3}
-    skema.append(pemetaan[jawapan])
+# --- 1. PENYEDIAAN SKEMA JAWAPAN (80 SOALAN) ---
+st.sidebar.header("🔑 Tetapkan Skema Jawapan")
+skema_jawapan = {}
 
-# 2. RUANG MUAT NAIK GAMBAR
-uploaded_file = st.file_uploader("Muat naik gambar kertas OMR (Format: JPG, PNG)", type=["jpg", "png", "jpeg"])
+# Buat tab di sidebar supaya kemas mengikut sub-kategori
+tab_bm, tab_bi, tab_mat = st.sidebar.tabs(["Bahasa Melayu", "Bahasa Inggeris", "Matematik"])
+
+with tab_bm:
+    st.write("**BM (Soalan 1 - 30)**")
+    for i in range(1, 31):
+        skema_jawapan[i] = st.selectbox(f"No {i}", ["A", "B", "C", "D"], key=f"bm_{i}")
+
+with tab_bi:
+    st.write("**BI (Soalan 31 - 55)**")
+    for i in range(31, 56):
+        skema_jawapan[i] = st.selectbox(f"No {i}", ["A", "B", "C", "D"], key=f"bi_{i}")
+
+with tab_mat:
+    st.write("**Matematik (Soalan 56 - 80)**")
+    for i in range(56, 81):
+        skema_jawapan[i] = st.selectbox(f"No {i}", ["A", "B", "C", "D"], key=f"mat_{i}")
+
+# --- 2. PROSES PENGIMBASAN ---
+uploaded_file = st.file_uploader("Muat naik fail gambar Borang Jawapan OMR", type=["jpg", "png", "jpeg"])
 
 if uploaded_file is not None:
-    # Tukar fail kepada format imej OpenCV
     file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
     image = cv2.imdecode(file_bytes, 1)
-    output_image = image.copy()
+    output = image.copy()
     
-    # --- PROSES COMPUTER VISION ---
-    # 1. Tukar ke Hitam-Putih (Grayscale)
+    # Tukar ke format hitam putih & cari bulatan
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    # 2. Kurangkan kabur (Blur)
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-    # 3. Tukar ke Binary (Hitam Pekat & Putih Pekat)
     thresh = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)[1]
     
-    # 4. Cari bentuk kontur (bulatan)
     contours, _ = cv2.findContours(thresh.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    bulatan_jawapan = []
+    bulatan_all = []
     
-    # Tapis objek yang betul-betul berbentuk bulat sahaja
     for c in contours:
         (x, y, w, h) = cv2.boundingRect(c)
         aspek_nisbah = w / float(h)
-        # Sifat bulatan: lebar dan tinggi hampir sama, saiz sederhana
-        if w >= 20 and h >= 20 and 0.9 <= aspek_nisbah <= 1.1:
-            bulatan_jawapan.append(c)
-            # Lukis garisan kuning pada setiap bulatan yang ditemui komputer
-            cv2.drawContours(output_image, [c], -1, (0, 255, 255), 2)
+        if w >= 15 and h >= 15 and 0.85 <= aspek_nisbah <= 1.15: # Melonggarkan sedikit julat saiz
+            bulatan_all.append(c)
+            cv2.drawContours(output, [c], -1, (0, 255, 255), 2)
             
-    # --- PAPARAN KEPUTUSAN ---
-    st.write(f"🔍 **Analisis Komputer:** Sistem mengesan **{len(bulatan_jawapan)}** bulatan pada kertas ini.")
+    # Paparkan maklumat analisis di skrin
+    st.write(f"📊 **Analisis Imbasan:** Sistem mengesan **{len(bulatan_all)}** bulatan daripada sepatutnya **320** bulatan.")
     
-    col1, col2 = st.columns(2)
+    col1, col2 = st.columns([2, 1])
     with col1:
-        st.subheader("🖼️ Hasil Imbasan")
-        st.image(output_image, channels="BGR", caption="Bulatan kuning bermaksud dikesan oleh komputer", use_container_width=True)
+        st.image(output, channels="BGR", caption="Hasil Pengesanan Bulatan (Kuning)", use_container_width=True)
         
     with col2:
-        st.subheader("📝 Nota Panduan")
-        st.info("Untuk membolehkan sistem mengira markah dengan tepat, jumlah bulatan yang dikesan mestilah genap mengikut bilangan soalan (Contoh: 5 soalan x 4 pilihan = 20 bulatan).")
-        
-        if len(bulatan_jawapan) != 20:
-            st.warning("⚠️ Jumlah bulatan belum mencukupi 20. Sila pastikan gambar kertas OMR anda diambil secara tegak, terang, dan tiada bayang gelap.")
+        if len(bulatan_all) == 320:
+            st.success("✅ Semua bulatan dikesan dengan sempurna! Sedia untuk pengiraan markah.")
+            # Di sini kita akan letakkan kod menyusun (sorting) mengikut lajur pada fasa akhir nanti.
+        else:
+            st.warning("⚠️ Jumlah bulatan tidak tepat 320. Pastikan borang diimbas secara rata, tiada kawasan tulisan nama yang mengganggu, dan kualiti gambar adalah tinggi.")
